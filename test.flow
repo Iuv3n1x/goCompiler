@@ -1,6 +1,1 @@
 let status = 200
-
-status ~> match {
-    [== 200] ~> processSuccess(),
-    [default] ~> logError()
-} ~> response

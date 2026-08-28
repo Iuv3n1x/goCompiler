@@ -2,16 +2,9 @@ package main
 
 type TokenType string
 
-type Position struct {
-	Offset int
-	Line   int
-	Column int
-}
-
 type Token struct {
-	Type     TokenType
-	Literal  string
-	Position Position
+	Type    TokenType
+	Literal string
 }
 
 const (
@@ -71,6 +64,24 @@ const (
 	TOKEN_RBRACE   TokenType = "}"
 )
 
+var keywords = map[string]TokenType{
+	"let":     TOKEN_LET,
+	"flow":    TOKEN_FLOW,
+	"return":  TOKEN_RETURN,
+	"match":   TOKEN_MATCH,
+	"default": TOKEN_DEFAULT,
+	"each":    TOKEN_EACH,
+	"map":     TOKEN_MAP,
+	"Print":   TOKEN_PRINT,
+	"len":     TOKEN_LEN,
+}
+
+var dataTypes = map[string]TokenType{
+	"null":  TOKEN_NULL,
+	"true":  TOKEN_BOOL,
+	"false": TOKEN_BOOL,
+}
+
 var isWhitespace = [256]bool{
 	' ': true, '\t': true, '\n': true, '\r': true,
 }
@@ -94,13 +105,13 @@ func lexer(input string) []Token {
 
 			if ch == '~' && next == '|' && scndNext == '>' {
 				tokens = append(tokens, Token{Type: TOKEN_INPLACE_ASYNC_PIPE, Literal: "~|>"})
-				pos += 2
+				pos += 3
 				continue
 			}
 
 			if ch == '|' && next == '|' && scndNext == '>' {
 				tokens = append(tokens, Token{Type: TOKEN_INPLACE_SYNC_PIPE, Literal: "||>"})
-				pos += 2
+				pos += 3
 				continue
 			}
 
@@ -151,7 +162,7 @@ func lexer(input string) []Token {
 			}
 
 			if ch == '~' && next == '>' {
-				tokens = append(tokens, Token{Type: TOKEN_ASYNC_PIPE, Literal: ":="})
+				tokens = append(tokens, Token{Type: TOKEN_ASYNC_PIPE, Literal: "~>"})
 				pos += 2
 				continue
 			}
@@ -175,7 +186,7 @@ func lexer(input string) []Token {
 			}
 
 			if ch == '&' && next == '=' {
-				tokens = append(tokens, Token{Type: TOKEN_REF_ASSIGN, Literal: ":="})
+				tokens = append(tokens, Token{Type: TOKEN_REF_ASSIGN, Literal: "&="})
 				pos += 2
 				continue
 			}
@@ -184,8 +195,128 @@ func lexer(input string) []Token {
 		switch ch {
 		case '=':
 			tokens = append(tokens, Token{Type: TOKEN_ASSIGN, Literal: "="})
+			pos++
+			continue
+		case '+':
+			tokens = append(tokens, Token{Type: TOKEN_PLUS, Literal: "+"})
+			pos++
+			continue
+		case '-':
+			tokens = append(tokens, Token{Type: TOKEN_MINUS, Literal: "-"})
+			pos++
+			continue
+		case '*':
+			tokens = append(tokens, Token{Type: TOKEN_ASTER, Literal: "*"})
+			pos++
+			continue
+		case '/':
+			tokens = append(tokens, Token{Type: TOKEN_SLASH, Literal: "/"})
+			pos++
+			continue
+		case '<':
+			tokens = append(tokens, Token{Type: TOKEN_LT, Literal: "<"})
+			pos++
+			continue
+		case '>':
+			tokens = append(tokens, Token{Type: TOKEN_GT, Literal: ">"})
+			pos++
+			continue
+		case '^':
+			tokens = append(tokens, Token{Type: TOKEN_CARET, Literal: "^"})
+			pos++
+			continue
+		case '&':
+			tokens = append(tokens, Token{Type: TOKEN_REF, Literal: "&"})
+			pos++
+			continue
+		case ',':
+			tokens = append(tokens, Token{Type: TOKEN_COMMA, Literal: ","})
+			pos++
+			continue
+		case '(':
+			tokens = append(tokens, Token{Type: TOKEN_LPAREN, Literal: "("})
+			pos++
+			continue
+		case ')':
+			tokens = append(tokens, Token{Type: TOKEN_RPAREN, Literal: ")"})
+			pos++
+			continue
+		case '[':
+			tokens = append(tokens, Token{Type: TOKEN_LBRACKET, Literal: "["})
+			pos++
+			continue
+		case ']':
+			tokens = append(tokens, Token{Type: TOKEN_RBRACKET, Literal: "]"})
+			pos++
+			continue
+		case '{':
+			tokens = append(tokens, Token{Type: TOKEN_LBRACE, Literal: "{"})
+			pos++
+			continue
+		case '}':
+			tokens = append(tokens, Token{Type: TOKEN_RBRACE, Literal: "}"})
+			pos++
+			continue
+
+		default:
+			if uint8(ch-'0') <= 9 {
+				start := pos
+				dotCount := 0
+
+				for uint8(input[pos]-'0') <= 9 || (start > pos && input[pos] == '.' && dotCount == 0) {
+					if ch == '.' {
+						dotCount++
+					}
+
+					pos++
+				}
+
+				literal := input[start:pos]
+				tokens = append(tokens, Token{Type: TOKEN_NUMBER, Literal: literal})
+			} else if pos < inputLen && ch == '"' {
+				pos++
+				start := pos
+
+				for pos < inputLen {
+					if input[pos] == '"' && (input[pos-1] > byte(inputLen) && input[pos-1] != '\\') {
+						break
+					}
+
+					pos++
+				}
+
+				if pos >= inputLen {
+					tokens = append(tokens, Token{Type: TOKEN_STRING, Literal: input[start-1:]})
+				} else {
+					literal := input[start:pos]
+					pos++
+					tokens = append(tokens, Token{Type: TOKEN_STRING, Literal: literal})
+				}
+			} else if pos < inputLen && (uint8(input[pos]|0x20-'a') <= 'z'-'a' || ch == '_') {
+				start := pos
+
+				for pos < inputLen && (uint8(input[pos]|0x20-'a') <= 'z'-'a' || (input[pos] >= '0' && input[pos] <= '9') || input[pos] == '_' || input[pos] == '-') {
+					pos++
+				}
+
+				literal := input[start:pos]
+				tokType := TOKEN_IDENT
+
+				if kwType, ok := keywords[literal]; ok {
+					tokType = kwType
+				} else if dType, ok := dataTypes[literal]; ok {
+					tokType = dType
+				}
+
+				tokens = append(tokens, Token{Type: tokType, Literal: literal})
+			} else {
+				tokens = append(tokens, Token{Type: TOKEN_ILLEGAL, Literal: string(ch)})
+				pos++
+			}
 		}
 	}
+
+	tokens = append(tokens, Token{Type: TOKEN_EOF, Literal: "EOF"})
 
 	return tokens
 }
